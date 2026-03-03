@@ -1,0 +1,28 @@
+[project]
+name = "tellus"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "gdal",
+    "graphviz>=0.21",
+    "ipython>=9.10.0",
+    "kaleido>=1.2.0",
+    "matplotlib>=3.10.8",
+    "opencv-contrib-python>=4.13.0.92",
+    "opencv-python>=4.13.0.92",
+    "plotly>=6.5.2",
+    "requests>=2.32.5",
+    "segmentation-models-pytorch>=0.5.0",
+    "tifffile>=2026.1.28",
+    "timm>=1.0.24",
+    "torchview>=0.2.7",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.2",
+    "pandas>=3.0.0",
+    "scikit-learn>=1.8.0",
+    "scipy>=1.17.0",
+    "seaborn>=0.13.2",
+    "spectral>=0.24"    
+]
