@@ -8,7 +8,7 @@ import tifffile as tif
 import matplotlib.pyplot as plt
 import spectral
 
-from logging import getLogger, config
+from logging import getLogger, config as logging_config
 
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
@@ -219,8 +219,39 @@ def save_pred_images(outdir, prefix, X_cube, y_gt, clf):
     plt.close()
 
 
-if __name__ == "__main__":
-    outdir = "./data"
+def build_config():
+    return {
+        "paths": {
+            "outdir": "./data",
+            "data_path": "/Volumes/ssd/HSID/data_10.1016/PaviaU",
+        },
+        "pca": {
+            "enabled": False,
+            "k": 10,
+            "method": "svd",
+            "mean_centered": True,
+        },
+        "split": {
+            "test_ratio": 0.5,
+        },
+        "models": {
+            "rf": {
+                "enabled": True,
+            },
+            "svm": {
+                "enabled": True,
+            },
+        },
+        "class_name": [
+            "Asphalt", "Meadows", "Gravel",
+            "Trees", "Painted metal sheets", "Bare Soil",
+            "Bitumen", "Self-Blocking Bricks", "Shadows",
+        ],
+    }
+
+
+def run(config):
+    outdir = config["paths"]["outdir"]
     os.makedirs(outdir, exist_ok=True)
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -232,48 +263,53 @@ if __name__ == "__main__":
         log_conf = json.load(f)
     if "handlers" in log_conf and "fileHandler" in log_conf["handlers"]:
         log_conf["handlers"]["fileHandler"]["filename"] = os.path.join(outdir, "run.log")
-    config.dictConfig(log_conf)
+    logging_config.dictConfig(log_conf)
     logger = getLogger(__name__)
 
-    data_path = "/Volumes/ssd/HSID/data_10.1016/PaviaU"
+    data_path = config["paths"]["data_path"]
     X = scipy.io.loadmat(os.path.join(data_path, "PaviaU.mat"))["paviaU"]
     y = scipy.io.loadmat(os.path.join(data_path, "PaviaU_gt.mat"))["paviaU_gt"]
 
     logger.debug(f"X: {X.shape} {type(X)}")
     logger.debug(f"y: {y.shape} {type(y)}")
 
-    K = 103
+    if config["pca"]["enabled"]:
+        X_feat, _, _ = mathworks_pca(
+            cube=X,
+            num_components=config["pca"]["k"],
+            outdir=outdir,
+            method=config["pca"]["method"],
+            mean_centered=config["pca"]["mean_centered"],
+            logger=logger,
+        )
+    else:
+        X_feat = X
+        logger.debug("PCA skipped: using original cube")
 
-    X_pca, _, _ = mathworks_pca(
-        cube=X,
-        num_components=K,
-        outdir=outdir,
-        method="svd",
-        mean_centered=True,
-        logger=logger,
+    XPatches, yPatches = create_patches(X_feat, y, removeZeroLabels=True)
+    X_train, X_test, y_train, y_test = split_train_test(
+        XPatches,
+        yPatches,
+        testRatio=config["split"]["test_ratio"],
     )
 
-    class_name = [
-        "Asphalt", "Meadows", "Gravel",
-        "Trees", "Painted metal sheets", "Bare Soil",
-        "Bitumen", "Self-Blocking Bricks", "Shadows",
-    ]
-    
-    XPatches, yPatches = create_patches(X, y, removeZeroLabels=True)
-    # XPatches, yPatches = create_patches(X_pca, y, removeZeroLabels=True)
-    X_train, X_test, y_train, y_test = split_train_test(XPatches, yPatches, testRatio=0.5)
+    if config["models"]["rf"]["enabled"]:
+        rf = RandomForestClassifier(random_state=0, n_jobs=-1)
+        rf.fit(X_train, y_train)
+        pre_rf = rf.predict(X_test)
+        acc_rf = save_report(outdir, "rf", y_test, pre_rf, config["class_name"])
+        save_pred_images(outdir, "rf", X_feat, y, rf)
+        print(f"RF  accuracy: {acc_rf*100:.2f}%")
 
-    rf = RandomForestClassifier(random_state=0, n_jobs=-1)
-    rf.fit(X_train, y_train)
-    pre_rf = rf.predict(X_test)
-    acc_rf = save_report(outdir, "rf", y_test, pre_rf, class_name)
-    save_pred_images(outdir, "rf", X_pca, y, rf)
+    if config["models"]["svm"]["enabled"]:
+        svm_clf = make_pipeline(StandardScaler(), svm.SVC(kernel="rbf", gamma="scale", C=1.0))
+        svm_clf.fit(X_train, y_train)
+        pre_svm = svm_clf.predict(X_test)
+        acc_svm = save_report(outdir, "svm", y_test, pre_svm, config["class_name"])
+        save_pred_images(outdir, "svm", X_feat, y, svm_clf)
+        print(f"SVM accuracy: {acc_svm*100:.2f}%")
 
-    svm_clf = make_pipeline(StandardScaler(), svm.SVC(kernel="rbf", gamma="scale", C=1.0))
-    svm_clf.fit(X_train, y_train)
-    pre_svm = svm_clf.predict(X_test)
-    acc_svm = save_report(outdir, "svm", y_test, pre_svm, class_name)
-    save_pred_images(outdir, "svm", X_pca, y, svm_clf)
 
-    print(f"RF  accuracy: {acc_rf*100:.2f}%")
-    print(f"SVM accuracy: {acc_svm*100:.2f}%")
+if __name__ == "__main__":
+    config = build_config()
+    run(config)
