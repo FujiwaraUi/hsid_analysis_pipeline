@@ -17,6 +17,15 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 
+CLASS_NAMES = [
+    "Asphalt", "Meadows", "Gravel",
+    "Trees", "Painted metal sheets", "Bare Soil",
+    "Bitumen", "Self-Blocking Bricks", "Shadows",
+]
+
+MODEL_NAMES = ("rf", "svm")
+
+
 def _rescale_0_1(img2d):
     img2d = img2d.astype(np.float32, copy=False)
     vmin = np.nanmin(img2d)
@@ -219,46 +228,13 @@ def save_pred_images(outdir, prefix, X_cube, y_gt, clf):
     plt.close()
 
 
-def build_config():
-    return {
-        "paths": {
-            "outdir": "./data",
-            "data_path": "/Volumes/ssd/HSID/data_10.1016/PaviaU",
-        },
-        "pca": {
-            "enabled": False,
-            "k": 10,
-            "method": "svd",
-            "mean_centered": True,
-        },
-        "split": {
-            "test_ratio": 0.5,
-        },
-        "models": {
-            "rf": {
-                "enabled": True,
-            },
-            "svm": {
-                "enabled": True,
-            },
-        },
-        "class_name": [
-            "Asphalt", "Meadows", "Gravel",
-            "Trees", "Painted metal sheets", "Bare Soil",
-            "Bitumen", "Self-Blocking Bricks", "Shadows",
-        ],
-    }
-
-
 def run(config):
     outdir = config["paths"]["outdir"]
     os.makedirs(outdir, exist_ok=True)
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     log_config_path = os.path.join(script_dir, "log_config.json")
-    if not os.path.exists(log_config_path):
-        # fallback to current working directory for backwards compatibility
-        log_config_path = os.path.join(os.getcwd(), "log_config.json")
+
     with open(log_config_path, "r") as f:
         log_conf = json.load(f)
     if "handlers" in log_conf and "fileHandler" in log_conf["handlers"]:
@@ -267,9 +243,14 @@ def run(config):
     logger = getLogger(__name__)
 
     data_path = config["paths"]["data_path"]
+    """
+    これどうするべきかね
+    入力データの形式によってかなり変わってくるからな
+    これも別のメソッドで入力するようにした方がいいかな
+    """
     X = scipy.io.loadmat(os.path.join(data_path, "PaviaU.mat"))["paviaU"]
     y = scipy.io.loadmat(os.path.join(data_path, "PaviaU_gt.mat"))["paviaU_gt"]
-
+    
     logger.debug(f"X: {X.shape} {type(X)}")
     logger.debug(f"y: {y.shape} {type(y)}")
 
@@ -309,6 +290,40 @@ def run(config):
         save_pred_images(outdir, "svm", X_feat, y, svm_clf)
         print(f"SVM accuracy: {acc_svm*100:.2f}%")
 
+
+def build_model_config(enabled=("rf", "svm")):
+    enabled = set(enabled)
+    return {name: {"enabled": name in enabled} for name in MODEL_NAMES}
+
+
+def build_config(
+    outdir="./data",
+    data_path="/Volumes/ssd/HSID/data_10.1016/PaviaU",
+    *,
+    pca_enabled=False,
+    pca_k=10,
+    pca_method="svd",
+    pca_mean_centered=True,
+    test_ratio=0.5,
+    enabled_models=("rf", "svm"),
+):
+    return {
+        "paths": {
+            "outdir": outdir,
+            "data_path": data_path,
+        },
+        "pca": {
+            "enabled": pca_enabled,
+            "k": pca_k,
+            "method": pca_method,
+            "mean_centered": pca_mean_centered,
+        },
+        "split": {
+            "test_ratio": test_ratio,
+        },
+        "models": build_model_config(enabled_models),
+        "class_name": CLASS_NAMES,
+    }
 
 if __name__ == "__main__":
     config = build_config()
