@@ -223,7 +223,12 @@ if __name__ == "__main__":
     outdir = "./data"
     os.makedirs(outdir, exist_ok=True)
 
-    with open("./log_config.json", "r") as f:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    log_config_path = os.path.join(script_dir, "log_config.json")
+    if not os.path.exists(log_config_path):
+        # fallback to current working directory for backwards compatibility
+        log_config_path = os.path.join(os.getcwd(), "log_config.json")
+    with open(log_config_path, "r") as f:
         log_conf = json.load(f)
     if "handlers" in log_conf and "fileHandler" in log_conf["handlers"]:
         log_conf["handlers"]["fileHandler"]["filename"] = os.path.join(outdir, "run.log")
