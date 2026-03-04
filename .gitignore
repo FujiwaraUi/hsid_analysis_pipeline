@@ -9,4 +9,6 @@ wheels/
 # Virtual environments
 .venv
 
-.src/data/
+src/data/
+src/Data_archive/
+src/Data
