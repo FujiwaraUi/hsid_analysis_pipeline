@@ -16,7 +16,7 @@ from sklearn import svm, metrics
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-
+# ベースは完成ということで。荒削りをしたい。
 def _rescale_0_1(img2d):
     img2d = img2d.astype(np.float32, copy=False)
     vmin = np.nanmin(img2d)
